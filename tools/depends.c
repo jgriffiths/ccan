@@ -126,12 +126,12 @@ static char **get_one_safe_deps(const void *ctx,
 	bool correct_style = false;
 
 	fname = path_join(ctx, dir, "_info");
-	raw = grab_file(fname, fname);
+	raw = grab_file(ctx, fname);
 	if (!raw)
 		errx(1, "Could not open %s", fname);
 
 	/* Replace \n by actual line breaks, and split it. */
-	lines = tal_strsplit(raw, replace(raw, raw, "\\n", "\n"), "\n",
+	lines = tal_strsplit(ctx, replace(ctx, raw, "\\n", "\n"), "\n",
 			     STR_EMPTY_OK);
 
 	deps = tal_arr(ctx, char *, tal_count(lines));
@@ -165,7 +165,7 @@ static char **get_one_safe_deps(const void *ctx,
 		len = strspn(str, "/abcdefghijklmnopqrstuvxwyz12345678980_");
 		if (len == 5)
 			continue;
-		deps[n++] = tal_strndup(deps, str, len);
+		deps[n++] = tal_strndup(ctx, str, len);
 	}
 	deps[n] = NULL;
 	tal_free(fname);
@@ -254,7 +254,7 @@ static char **get_one_cflags(const void *ctx, const char *dir,
 }
 
 /* O(n^2) but n is small. */
-static char **add_deps(char **deps1, char **deps2)
+static char **add_deps(const void *ctx, char **deps1, char **deps2)
 {
 	unsigned int i, len;
 
@@ -264,7 +264,7 @@ static char **add_deps(char **deps1, char **deps2)
 		if (have_dep(deps1, deps2[i]))
 			continue;
 		tal_resize(&deps1, len + 1);
-		deps1[len-1] = tal_strdup(deps1, deps2[i]);
+		deps1[len-1] = tal_strdup(ctx, deps2[i]);
 		deps1[len++] = NULL;
 	}
 	return deps1;
@@ -339,7 +339,7 @@ char **get_libs(const void *ctx, const char *dir, const char *style,
 	if (style) {
 		deps = get_deps(ctx, dir, style, true, get_info);
 		if (streq(style, "testdepends"))
-			deps = add_deps(deps,
+			deps = add_deps(ctx, deps,
 					get_deps(ctx, dir, "depends", true,
 						 get_info));
 
