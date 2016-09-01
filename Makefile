@@ -1,97 +1,126 @@
-# Hacky makefile to compile everything and run the tests in some kind
-# of sane order.
+# Makefile for CCAN
 
-# Main targets:
-# 
-# check: run tests on all ccan modules (use 'make check V=--verbose' for more)
-#        Includes building libccan.a.
-# libccan.a: A library with all the ccan modules in it.
-# tools: build useful tools in tools/ dir.
-#        Especially tools/ccanlint/ccanlint and tools/namespacize.
-# distclean: destroy everything back to pristine state
+# Adding 'quiet=1' to make arguments builds silently
+QUIETEN.1 := @
+PRE := $(QUIETEN.$(quiet))
 
-# Where make scores puts the results
-SCOREDIR=scores/$(shell whoami)/$(shell uname -s)-$(shell uname -m)-$(CC)-$(shell git describe --always --dirty)
-CCANLINT=tools/ccanlint/ccanlint --deps-fail-ignore
-CCANLINT_FAST=$(CCANLINT) -x tests_pass_valgrind -x tests_compile_coverage
+# Adding 'opt=1' to make arguments builds optimised
+OPT.1 := -O2
+OPT_CFAGS := $(OPT.$(opt))
 
-default: all_info libccan.a
+default: all
 
-ALL_DEPENDS=$(patsubst %, ccan/%/.depends, $(MODS))
+# Avoid some work when cleaning
+CLEANING := $(if $(filter clean, $(MAKECMDGOALS)),true,false)
 
-# By default, we skip modules with external deps (or plaform specific)
-MODS_EXCLUDE:=altstack generator jmap jset nfs ogg_to_pcm tal/talloc wwviaudio
-# This randomly fails, and reliably fails under Jenkins :(
-MODS_FLAKY:=altstack
-MODS_RELIABLE=$(filter-out $(MODS_FLAKY),$(MODS))
+# Our flags for building
+WARN_CFLAGS := -Wall -W -Wstrict-prototypes -Wold-style-definition \
+ -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith \
+ -Wwrite-strings -Wundef -Wno-unknown-pragmas -Wno-unused-parameter \
+ -Wno-missing-field-initializers
+DEPENDENCY_FLAGS = -MMD -MP -MF$(@:%=%.d) -MT$@
+CCAN_CFLAGS := $(OPT_CFAGS) -g3 -ggdb $(WARN_CFLAGS) -DCCAN_STR_DEBUG=1 -I. $(CFLAGS)
 
-include Makefile-ccan
+# Anything with an _info file is a module ...
+INFO_SRCS := $(wildcard ccan/*/_info ccan/*/*/_info)
+ALL_INFOS := $(INFO_SRCS:%_info=%info)
+ALL_MODULES := $(ALL_INFOS:%/info=%)
 
-fastcheck: $(MODS_RELIABLE:%=summary-fastcheck/%)
+# ... Except stuff that needs external dependencies, which we exclude
+MODULES_EXCLUDE := altstack generator jmap jset nfs ogg_to_pcm tal/talloc wwviaudio
+MODULES:= $(filter-out $(MODULES_EXCLUDE:%=ccan/%) ,$(ALL_MODULES))
 
-check: $(MODS_RELIABLE:%=summary-check/%)
+# Sources are C files in each module, objects the resulting .o files
+SRCS := $(wildcard $(MODULES:%=%/*.c))
+OBJS := $(SRCS:%.c=%.o)
+DEPS := $(OBJS:%=%.d)
 
-distclean: clean
-	rm -f $(ALL_DEPENDS)
+# We build all object files using our CCAN_CFLAGS, after config.h
+%.o : %.c config.h
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) -c $< -o $@
 
-scores: $(SCOREDIR)/SUMMARY
+# Our static library is made from all object files
+LIB := libccan.a
+$(LIB): $(OBJS)
+	$(PRE)$(AR) -rs $@ $^
 
-$(SCOREDIR)/SUMMARY: $(MODS:%=$(SCOREDIR)/%.score)
-	git describe --always > $@
-	uname -a >> $@
-	$(CC) -v >> $@
-	cat $^ | grep 'Total score:' >> $@
+# _info files are compiled into executables and don't need dependencies
+%info : %_info config.h
+	$(PRE)$(CC) $(CCAN_CFLAGS) -I. -o $@ -x c $<
 
-$(SCOREDIR)/%.score: ccan/%/_info tools/ccanlint/ccanlint $(OBJFILES)
-	mkdir -p `dirname $@`
-	$(CCANLINT) -v -s ccan/$* > $@ || true
+# config.h is built by configurator
+CONFIGURATOR := tools/configurator/configurator
+CONFIG_DEPS := $(CONFIGURATOR).d
+$(CONFIGURATOR) : $(CONFIGURATOR).c
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< -o $@
+config.h: $(CONFIGURATOR) Makefile
+	$(PRE)$(CONFIGURATOR) $(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) >$@.tmp && mv $@.tmp $@
 
-$(ALL_DEPENDS): %/.depends: %/_info tools/ccan_depends
-	tools/ccan_depends $* > $@ || ( rm -f $@; exit 1 )
+# Tools are under the tools/ directory
+TOOLS := ccan_depends doc_extract namespacize modfiles
+TOOLS := $(TOOLS:%=tools/%)
+TOOLS_SRCS := $(filter-out $(TOOLS:%=%.c), $(wildcard tools/*.c))
+TOOLS_OBJS := $(TOOLS_SRCS:%.c=%.o)
+TOOLS_DEPS := $(TOOLS_OBJS:%=%.d) $(TOOLS:%=%.d)
+TOOLS_LIB := tools/libccantools.a
+$(TOOLS_LIB): $(TOOLS_OBJS)
+	$(PRE)$(AR) -rs $@ $^
+# There are duplicate symbols due to conflicting libs - we have to
+# filter them out instead of just linking with $(LIB).
+TOOLS_CCAN_OBJS := $(filter-out ccan/grab_file/grab_file.o ccan/daemonize/daemonize.o, $(OBJS))
+tools/% : tools/%.c $(TOOLS_LIB) $(TOOLS_CCAN_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< -o $@ -Ltools -lccantools $(TOOLS_CCAN_OBJS) -lm
 
-# Actual dependencies are created in inter-depends
-check/%: tools/ccanlint/ccanlint
-	$(CCANLINT) ccan/$*
+# ccanlint requires its own build rules
+LINT := tools/ccanlint/ccanlint
+LINT_SRCS := $(filter-out $(LINT).c, $(wildcard tools/ccanlint/*.c) $(wildcard tools/ccanlint/tests/*.c))
+LINT_OBJS := $(LINT_SRCS:%.c=%.o)
+LINT_DEPS := $(LINT_OBJS:%=%.d) $(LINT).d
+$(LINT) : $(LINT).c $(LINT_OBJS) $(TOOLS_LIB) $(TOOLS_CCAN_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< $(LINT_OBJS) -o $@ -Ltools -lccantools $(TOOLS_CCAN_OBJS) -lm
+# How to run ccanlint
+LINT_CMD := $(LINT) --deps-fail-ignore
 
-fastcheck/%: tools/ccanlint/ccanlint
-	$(CCANLINT_FAST) ccan/$*
 
-# Doesn't test dependencies, doesn't print verbose fail results.
-summary-check/%: tools/ccanlint/ccanlint $(OBJFILES)
-	$(CCANLINT) -s ccan/$*
+# Tests
+# We generate dependencies for tests into a .deps file
+%/.deps: %/info tools/gen_deps.sh tools/ccan_depends
+	$(PRE)tools/gen_deps.sh $* $@
+TEST_DEPS := $(MODULES:%=%/.deps)
 
-summary-fastcheck/%: tools/ccanlint/ccanlint $(OBJFILES)
-	$(CCANLINT_FAST) -s ccan/$*
+# We produce .ok files when the tests succeed
+%/.ok: $(LINT)
+	$(PRE)$(LINT_CMD) -s $* && touch $@
+TEST_RESULTS := $(MODULES:%=%/.ok)
 
-ccan/%/info: ccan/%/_info config.h
-	$(CC) $(CCAN_CFLAGS) -I. -o $@ -x c $<
+%/.fast.ok: $(LINT)
+	$(PRE)$(LINT_CMD) -x tests_pass_valgrind -x tests_compile_coverage -s $* && touch $@
+FAST_TEST_RESULTS := $(MODULES:%=%/.fast.ok)
 
-all_info: $(MODS:%=ccan/%/info)
+# 'make check/fastcheck' runs the summary/fast summary tests
+check: $(TEST_RESULTS)
+fastcheck: $(FAST_TEST_RESULTS)
 
-clean: tools-clean
-	rm -f `find * -name '*.o'` `find * -name '.depends'` `find * -name '*.a'`  `find * -name info` `find * -name '*.d'` `find ccan -name '*-Makefile'`
-	rm -f config.h
-	rm -f inter-depends lib-depends test-depends
+# Bring in our generated dependencies
+ifeq ($(CLEANING),false)
+-include $(DEPS) $(TOOLS_DEPS) $(LINT_DEPS) $(TEST_DEPS)
+endif
 
-# Creates a dependency from the tests to the object files which it needs.
-inter-depends: $(ALL_DEPENDS) Makefile
-	for f in $(ALL_DEPENDS); do echo check-$$(basename $$(dirname $$f) ): $$(for dir in $$(cat $$f) $$(dirname $$f); do [ "$$(echo $$dir/*.c)" = "$$dir/*.c" ] || echo ccan/"$$(basename $$dir)".o; done); done > $@
+# Targets
+.PHONY: clean TAGS
 
-# Creates dependencies between tests, so if foo depends on bar, bar is tested
-# first 
-test-depends: $(ALL_DEPENDS) Makefile
-	for f in $(ALL_DEPENDS); do echo check/`basename \`dirname $$f\``: `sed -n 's,ccan/\(.*\),check/\1,p' < $$f`; done > $@
+# Default target is the static library, info files and tools
+all:: $(LIB) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
 
-TAGS: FORCE
-	find * -name '*.[ch]' | xargs etags
+# Cleaning up
+clean:
+	$(PRE)rm -f $(DEPS) $(CONFIG_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
+	$(PRE)rm -f $(OBJS) $(TOOLS_OBJS) $(LINT_OBJS)
+	$(PRE)rm -f $(LIB) $(TOOLS_LIB)
+	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS)
+	$(PRE)rm -f $(TEST_RESULTS) $(FAST_TEST_RESULTS)
+	$(PRE)rm -f TAGS config.h
 
-FORCE:
-
-# Ensure we don't end up with empty file if configurator fails!
-config.h: tools/configurator/configurator Makefile Makefile-ccan
-	tools/configurator/configurator $(CC) $(CCAN_CFLAGS) > $@.tmp && mv $@.tmp $@
-
-include tools/Makefile
--include inter-depends
--include test-depends
--include Makefile-web
+# 'make TAGS' builds etags
+TAGS:
+	$(PRE)find * -name '*.[ch]' | xargs etags

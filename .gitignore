@@ -1,9 +1,10 @@
 TAGS
-.depends
 .valgrind_suppressions
 *.d
 *.o
-libccan.a
+*.a
+*.deps
+*.ok
 config.h
 *~
 tools/ccan_depends
@@ -11,11 +12,7 @@ tools/doc_extract
 tools/namespacize
 tools/run_tests
 tools/ccanlint/ccanlint
-tools/ccanlint/generated-testlist
 tools/modfiles
-inter-depends
-test-depends
-lib-depends
 tools/_infotojson/infotojson
 tools/ccanlint/test/run-file_analysis
 tools/configurator/configurator
