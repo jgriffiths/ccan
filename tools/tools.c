@@ -38,7 +38,8 @@ char *run_with_timeout(const void *ctx, const char *cmd,
 	pid_t pid;
 	int p[2];
 	struct rbuf in;
-	int status, ms;
+	int status;
+	uint64_t ms;
 	struct timeabs start;
 
 	*ok = false;
@@ -98,7 +99,7 @@ char *run_with_timeout(const void *ctx, const char *cmd,
 	close(p[0]);
 	if (tools_verbose) {
 		printf("%s", in.buf);
-		printf("Finished: %u ms, %s %u\n", ms,
+		printf("Finished: %lu ms, %s %u\n", ms,
 		       WIFEXITED(status) ? "exit status" : "killed by signal",
 		       WIFEXITED(status) ? WEXITSTATUS(status)
 		       : WTERMSIG(status));

@@ -614,7 +614,7 @@ static bool test_module(struct dgraph_node *all,
 int main(int argc, char *argv[])
 {
 	bool summary = false, pass = true, deps_fail_ignore = false;
-	unsigned int i;
+	int i;
 	const char *prefix = "";
 	char *cwd = path_cwd(NULL), *dir;
 	struct ccanlint top;  /* cannot_run may try to set ->can_run */

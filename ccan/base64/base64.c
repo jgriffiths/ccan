@@ -178,7 +178,7 @@ ssize_t base64_decode_using_maps(const base64_maps_t *maps,
 {
 	ssize_t dest_offset = 0;
 	ssize_t i;
-	size_t more;
+	ssize_t more;
 
 	if (destlen < base64_decoded_length(srclen)) {
 		errno = EOVERFLOW;

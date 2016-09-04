@@ -26,7 +26,7 @@ static bool typematch(const char *a, const char *b)
 
 int main(int argc, char *argv[])
 {
-	unsigned int i;
+	int i;
 	const char *type;
 	const char *function = NULL;
 

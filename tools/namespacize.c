@@ -22,7 +22,7 @@ static bool verbose = false;
 static int indent = 0;
 #define verbose(args...)						\
 	do { if (verbose) {						\
-			unsigned int _i;				\
+			int _i;						\
 			for (_i = 0; _i < indent; _i++) printf(" ");	\
 			printf(args);					\
 		}							\
@@ -215,7 +215,7 @@ static void look_for_definitions(char *contents, struct replace **repl)
 			if (strspn(stmt+i, IDENT_CHARS) == 0)
 				break;
 
-		if (i != strlen(stmt)-1) {
+		if (i != (int)strlen(stmt)-1) {
 			add_replace_tok(repl, stmt+i+1);
 			continue;
 		}
@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (argc > 2 && streq(argv[1], "--adjust")) {
-		unsigned int i;
+		int i;
 
 		for (i = 2; i < argc; i++)
 			adjust_dir(argv[i]);
