@@ -213,7 +213,7 @@ static struct cdump_type *get_type(struct cdump_definitions *defs,
 				   enum cdump_type_kind kind,
 				   const char *name)
 {
-	cdump_map_t *m;
+	cdump_map_t *m = NULL;
 	struct cdump_type *t;
 
 	switch (kind) {
@@ -229,7 +229,7 @@ static struct cdump_type *get_type(struct cdump_definitions *defs,
 	case CDUMP_UNKNOWN:
 	case CDUMP_ARRAY:
 	case CDUMP_POINTER:
-		m = NULL;
+		break; /* Leave m NULL */
 	}
 
 	/* Do we already have it? */
