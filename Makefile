@@ -62,25 +62,30 @@ TOOLS := $(TOOLS:%=tools/%)
 TOOLS_SRCS := $(filter-out $(TOOLS:%=%.c), $(wildcard tools/*.c))
 TOOLS_OBJS := $(TOOLS_SRCS:%.c=%.o)
 TOOLS_DEPS := $(TOOLS_OBJS:%=%.d) $(TOOLS:%=%.d)
-TOOLS_LIB := tools/libccantools.a
-$(TOOLS_LIB): $(TOOLS_OBJS)
-	$(PRE)$(AR) -rs $@ $^
-# There are duplicate symbols due to conflicting libs - we have to
-# filter them out instead of just linking with $(LIB).
-TOOLS_CCAN_OBJS := $(filter-out ccan/grab_file/grab_file.o ccan/daemonize/daemonize.o, $(OBJS))
-tools/% : tools/%.c $(TOOLS_LIB) $(TOOLS_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< -o $@ -Ltools -lccantools $(TOOLS_CCAN_OBJS) -lm
+TOOLS_CCAN_MODULES := err foreach hash htable list noerr opt rbuf \
+    read_write_all str take tal tal/grab_file tal/link tal/path \
+    tal/str time
+TOOLS_CCAN_SRCS := $(wildcard $(TOOLS_CCAN_MODULES:%=ccan/%/*.c))
+TOOLS_CCAN_OBJS := $(TOOLS_CCAN_SRCS:%.c=%.o)
+tools/% : tools/%.c $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $^ -o $@ -lm
 
 # ccanlint requires its own build rules
 LINT := tools/ccanlint/ccanlint
 LINT_SRCS := $(filter-out $(LINT).c, $(wildcard tools/ccanlint/*.c) $(wildcard tools/ccanlint/tests/*.c))
 LINT_OBJS := $(LINT_SRCS:%.c=%.o)
 LINT_DEPS := $(LINT_OBJS:%=%.d) $(LINT).d
-$(LINT) : $(LINT).c $(LINT_OBJS) $(TOOLS_LIB) $(TOOLS_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< $(LINT_OBJS) -o $@ -Ltools -lccantools $(TOOLS_CCAN_OBJS) -lm
+LINT_CCAN_MODULES := asort autodata dgraph foreach hash htable ilog \
+    lbalance list noerr opt ptr_valid rbuf read_write_all \
+    str strmap take tal tal/grab_file tal/link tal/path \
+    tal/str time
+LINT_CCAN_SRCS := $(wildcard $(LINT_CCAN_MODULES:%=ccan/%/*.c))
+LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o)
+$(LINT) : $(LINT).c $(LINT_OBJS) $(TOOLS_OBJS) $(LINT_CCAN_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $^ -lm -o $@
+
 # How to run ccanlint
 LINT_CMD := $(LINT) --deps-fail-ignore
-
 
 # Tests
 # We generate dependencies for tests into a .deps file
@@ -116,7 +121,7 @@ all:: $(LIB) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
 clean:
 	$(PRE)rm -f $(DEPS) $(CONFIG_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 	$(PRE)rm -f $(OBJS) $(TOOLS_OBJS) $(LINT_OBJS)
-	$(PRE)rm -f $(LIB) $(TOOLS_LIB)
+	$(PRE)rm -f $(LIB)
 	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS)
 	$(PRE)rm -f $(TEST_RESULTS) $(FAST_TEST_RESULTS)
 	$(PRE)rm -f TAGS config.h
