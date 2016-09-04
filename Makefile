@@ -1,20 +1,16 @@
 # Makefile for CCAN
 
-# Adding 'quiet=1' to make arguments builds silently
+# 'make quiet=1' builds silently
 QUIETEN.1 := @
 PRE := $(QUIETEN.$(quiet))
 
-# Adding 'opt=1' to make arguments builds optimised
-OPT.1 := -O2
-OPT_CFAGS := $(OPT.$(opt))
-
-default: all
+all::
 
 # Our flags for building
 WARN_CFLAGS := -Wall -Wstrict-prototypes -Wold-style-definition -Wundef \
  -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith -Wwrite-strings
 DEP_CFLAGS = -MMD -MP -MF$(@:%=%.d) -MT$@
-CCAN_CFLAGS := $(OPT_CFAGS) -g3 -ggdb $(WARN_CFLAGS) -DCCAN_STR_DEBUG=1 -I. $(CFLAGS)
+CCAN_CFLAGS := -g3 -ggdb $(WARN_CFLAGS) -DCCAN_STR_DEBUG=1 -I. $(CFLAGS)
 
 # Anything with an _info file is a module ...
 INFO_SRCS := $(wildcard ccan/*/_info ccan/*/*/_info)
@@ -22,8 +18,8 @@ ALL_INFOS := $(INFO_SRCS:%_info=%info)
 ALL_MODULES := $(ALL_INFOS:%/info=%)
 
 # ... Except stuff that needs external dependencies, which we exclude
-MODULES_EXCLUDE := altstack generator jmap jset nfs ogg_to_pcm tal/talloc wwviaudio
-MODULES:= $(filter-out $(MODULES_EXCLUDE:%=ccan/%) ,$(ALL_MODULES))
+EXCLUDE := altstack generator jmap jset nfs ogg_to_pcm tal/talloc wwviaudio
+MODULES:= $(filter-out $(EXCLUDE:%=ccan/%), $(ALL_MODULES))
 
 # Sources are C files in each module, objects the resulting .o files
 SRCS := $(wildcard $(MODULES:%=%/*.c))
@@ -38,68 +34,59 @@ DEPS := $(OBJS:%=%.d)
 %info : %_info config.h
 	$(PRE)$(CC) $(CCAN_CFLAGS) -I. -o $@ -x c $<
 
-# config.h is built by configurator
+# config.h is built by configurator which has no ccan dependencies
 CONFIGURATOR := tools/configurator/configurator
-CONFIGURATOR_DEPS := $(CONFIGURATOR).d
-$(CONFIGURATOR) : $(CONFIGURATOR).c
+$(CONFIGURATOR): $(CONFIGURATOR).c
 	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $< -o $@
 config.h: $(CONFIGURATOR) Makefile
-	$(PRE)$(CONFIGURATOR) $(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) >$@.tmp && mv $@.tmp $@
+	$(PRE)$(CONFIGURATOR) $(CC) $(CCAN_CFLAGS) >$@.tmp && mv $@.tmp $@
 
-# Tools are under the tools/ directory
-TOOLS := ccan_depends doc_extract namespacize modfiles
-TOOLS := $(TOOLS:%=tools/%)
+# Tools
+TOOLS := tools/ccan_depends tools/doc_extract tools/namespacize tools/modfiles
 TOOLS_SRCS := $(filter-out $(TOOLS:%=%.c), $(wildcard tools/*.c))
-TOOLS_OBJS := $(TOOLS_SRCS:%.c=%.o)
-TOOLS_DEPS := $(TOOLS_OBJS:%=%.d) $(TOOLS:%=%.d)
+TOOLS_DEPS := $(TOOLS_SRCS:%.c=%.d) $(TOOLS:%=%.d)
 TOOLS_CCAN_MODULES := err foreach hash htable list noerr opt rbuf \
-    read_write_all str take tal tal/grab_file tal/link tal/path \
-    tal/str time
+    read_write_all str take tal tal/grab_file tal/link tal/path tal/str time
 TOOLS_CCAN_SRCS := $(wildcard $(TOOLS_CCAN_MODULES:%=ccan/%/*.c))
-TOOLS_CCAN_OBJS := $(TOOLS_CCAN_SRCS:%.c=%.o)
-tools/% : tools/%.c $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $< $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS) -lm -o $@
+TOOLS_OBJS := $(TOOLS_SRCS:%.c=%.o) $(TOOLS_CCAN_SRCS:%.c=%.o)
+tools/% : tools/%.c $(TOOLS_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $< $(TOOLS_OBJS) -lm -o $@
 
-# ccanlint requires its own build rules
+# ccanlint
 LINT := tools/ccanlint/ccanlint
-LINT_SRCS := $(filter-out $(LINT).c, $(wildcard tools/ccanlint/*.c) $(wildcard tools/ccanlint/tests/*.c))
-LINT_OBJS := $(LINT_SRCS:%.c=%.o)
-LINT_DEPS := $(LINT_OBJS:%=%.d) $(LINT).d
-LINT_CCAN_MODULES := asort autodata dgraph ilog lbalance ptr_valid strmap
-LINT_CCAN_SRCS := $(wildcard $(LINT_CCAN_MODULES:%=ccan/%/*.c))
-LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o) $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
-$(LINT) : $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS) -lm -o $@
-
-# Tests
 LINT_OPTS.ok := -s
 LINT_OPTS.fast.ok := -s -x tests_pass_valgrind -x tests_compile_coverage
-LINT_CMD = $(LINT) $(LINT_OPTS$(notdir $@)) --deps-fail-ignore
+LINT_SRCS := $(filter-out $(LINT).c, $(wildcard tools/ccanlint/*.c tools/ccanlint/tests/*.c))
+LINT_DEPS := $(LINT_SRCS:%.c=%.d) $(LINT).d
+LINT_CCAN_MODULES := asort autodata dgraph ilog lbalance ptr_valid strmap
+LINT_CCAN_SRCS := $(wildcard $(LINT_CCAN_MODULES:%=ccan/%/*.c))
+LINT_OBJS := $(LINT_SRCS:%.c=%.o) $(LINT_CCAN_SRCS:%.c=%.o) $(TOOLS_OBJS)
+$(LINT): $(LINT).c $(LINT_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $(LINT).c $(LINT_OBJS) -lm -o $@
 
-# We generate dependencies for tests into a .deps file
-%/.deps: %/info tools/gen_deps.sh tools/ccan_depends
+# We generate dependencies for tests into a .d file
+%/.d: %/info tools/gen_deps.sh tools/ccan_depends
 	$(PRE)tools/gen_deps.sh $* > $@ || rm -f $@
-TEST_DEPS := $(MODULES:%=%/.deps)
+TEST_DEPS := $(MODULES:%=%/.d)
 
 # We produce .ok files when the tests succeed
 %.ok: $(LINT)
-	$(PRE)$(LINT_CMD) $(dir $*) && touch $@
+	$(PRE)$(LINT) $(LINT_OPTS$(notdir $@)) --deps-fail-ignore $(LINTFLAGS) $(dir $*) && touch $@
 
 check: $(MODULES:%=%/.ok)
 fastcheck: $(MODULES:%=%/.fast.ok)
 fullcheck: $(MODULES:%=%/.full.ok)
 
 ifeq ($(strip $(filter clean, $(MAKECMDGOALS))),)
-# Bring in our generated dependencies since we are not cleaning
--include $(DEPS) $(CONFIGURATOR_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
+-include $(DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 endif
 
-# Default target is the object files, info files and tools
+# Default target: object files, info files and tools
 all:: $(OBJS) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
 
 .PHONY: clean TAGS
 clean:
-	$(PRE)find . -name "*.o" -o -name "*.d" -o -name "*.ok" -o -name ".deps" -delete
+	$(PRE)find . -name "*.d" -o -name "*.o" -o -name "*.ok" | xargs -n 256 rm -f
 	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS) TAGS config.h config.h.d
 
 # 'make TAGS' builds etags
