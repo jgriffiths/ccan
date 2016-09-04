@@ -2,7 +2,6 @@ TAGS
 .valgrind_suppressions
 *.d
 *.o
-*.a
 *.deps
 *.ok
 config.h

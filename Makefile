@@ -39,11 +39,6 @@ DEPS := $(OBJS:%=%.d)
 %.o : %.c config.h
 	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) -c $< -o $@
 
-# Our static library is made from all object files
-LIB := libccan.a
-$(LIB): $(OBJS)
-	$(PRE)$(AR) -rs $@ $^
-
 # _info files are compiled into executables and don't need dependencies
 %info : %_info config.h
 	$(PRE)$(CC) $(CCAN_CFLAGS) -I. -o $@ -x c $<
@@ -114,17 +109,16 @@ endif
 # Targets
 .PHONY: clean TAGS
 
-# Default target is the static library, info files and tools
-all:: $(LIB) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
+# Default target is the object files, info files and tools
+all:: $(OBJS) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
 
 # Cleaning up
 clean:
 	$(PRE)rm -f $(DEPS) $(CONFIG_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 	$(PRE)rm -f $(OBJS) $(TOOLS_OBJS) $(LINT_OBJS)
-	$(PRE)rm -f $(LIB)
 	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS)
 	$(PRE)rm -f $(TEST_RESULTS) $(FAST_TEST_RESULTS)
-	$(PRE)rm -f TAGS config.h
+	$(PRE)rm -f TAGS config.h config.h.d
 
 # 'make TAGS' builds etags
 TAGS:
