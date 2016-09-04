@@ -63,21 +63,18 @@ TOOLS_CCAN_MODULES := err foreach hash htable list noerr opt rbuf \
 TOOLS_CCAN_SRCS := $(wildcard $(TOOLS_CCAN_MODULES:%=ccan/%/*.c))
 TOOLS_CCAN_OBJS := $(TOOLS_CCAN_SRCS:%.c=%.o)
 tools/% : tools/%.c $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $^ -o $@ -lm
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS) -lm -o $@
 
 # ccanlint requires its own build rules
 LINT := tools/ccanlint/ccanlint
 LINT_SRCS := $(filter-out $(LINT).c, $(wildcard tools/ccanlint/*.c) $(wildcard tools/ccanlint/tests/*.c))
 LINT_OBJS := $(LINT_SRCS:%.c=%.o)
 LINT_DEPS := $(LINT_OBJS:%=%.d) $(LINT).d
-LINT_CCAN_MODULES := asort autodata dgraph foreach hash htable ilog \
-    lbalance list noerr opt ptr_valid rbuf read_write_all \
-    str strmap take tal tal/grab_file tal/link tal/path \
-    tal/str time
+LINT_CCAN_MODULES := asort autodata dgraph ilog lbalance ptr_valid strmap
 LINT_CCAN_SRCS := $(wildcard $(LINT_CCAN_MODULES:%=ccan/%/*.c))
-LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o)
-$(LINT) : $(LINT).c $(LINT_OBJS) $(TOOLS_OBJS) $(LINT_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $^ -lm -o $@
+LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o) $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
+$(LINT) : $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS)
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS) -lm -o $@
 
 # How to run ccanlint
 LINT_CMD := $(LINT) --deps-fail-ignore
