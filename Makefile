@@ -76,27 +76,22 @@ LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o) $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
 $(LINT) : $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS)
 	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS) -lm -o $@
 
-# How to run ccanlint
-LINT_CMD := $(LINT) --deps-fail-ignore
-
 # Tests
+LINT_OPTS.ok := -s
+LINT_OPTS.fast.ok := -s -x tests_pass_valgrind -x tests_compile_coverage
+LINT_CMD = $(LINT) $(LINT_OPTS$(notdir $@)) --deps-fail-ignore
+
 # We generate dependencies for tests into a .deps file
 %/.deps: %/info tools/gen_deps.sh tools/ccan_depends
 	$(PRE)tools/gen_deps.sh $* $@
 TEST_DEPS := $(MODULES:%=%/.deps)
 
 # We produce .ok files when the tests succeed
-%/.ok: $(LINT)
-	$(PRE)$(LINT_CMD) -s $* && touch $@
-TEST_RESULTS := $(MODULES:%=%/.ok)
+%.ok: $(LINT)
+	$(PRE)$(LINT_CMD) $(dir $*) && touch $@
 
-%/.fast.ok: $(LINT)
-	$(PRE)$(LINT_CMD) -x tests_pass_valgrind -x tests_compile_coverage -s $* && touch $@
-FAST_TEST_RESULTS := $(MODULES:%=%/.fast.ok)
-
-# 'make check/fastcheck' runs the summary/fast summary tests
-check: $(TEST_RESULTS)
-fastcheck: $(FAST_TEST_RESULTS)
+check: $(MODULES:%=%/.ok)
+fastcheck: $(MODULES:%=%/.fast.ok)
 
 # Bring in our generated dependencies
 ifeq ($(CLEANING),false)
@@ -114,7 +109,7 @@ clean:
 	$(PRE)rm -f $(DEPS) $(CONFIG_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 	$(PRE)rm -f $(OBJS) $(TOOLS_OBJS) $(LINT_OBJS)
 	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS)
-	$(PRE)rm -f $(TEST_RESULTS) $(FAST_TEST_RESULTS)
+	$(PRE)find . -name "*.ok" -delete
 	$(PRE)rm -f TAGS config.h config.h.d
 
 # 'make TAGS' builds etags
