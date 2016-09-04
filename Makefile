@@ -78,7 +78,7 @@ LINT_CMD = $(LINT) $(LINT_OPTS$(notdir $@)) --deps-fail-ignore
 
 # We generate dependencies for tests into a .deps file
 %/.deps: %/info tools/gen_deps.sh tools/ccan_depends
-	$(PRE)tools/gen_deps.sh $* $@
+	$(PRE)tools/gen_deps.sh $* > $@ || rm -f $@
 TEST_DEPS := $(MODULES:%=%/.deps)
 
 # We produce .ok files when the tests succeed
@@ -87,6 +87,7 @@ TEST_DEPS := $(MODULES:%=%/.deps)
 
 check: $(MODULES:%=%/.ok)
 fastcheck: $(MODULES:%=%/.fast.ok)
+fullcheck: $(MODULES:%=%/.full.ok)
 
 ifeq ($(strip $(filter clean, $(MAKECMDGOALS))),)
 # Bring in our generated dependencies since we are not cleaning
