@@ -11,11 +11,9 @@ OPT_CFAGS := $(OPT.$(opt))
 default: all
 
 # Our flags for building
-WARN_CFLAGS := -Wall -W -Wstrict-prototypes -Wold-style-definition \
- -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith \
- -Wwrite-strings -Wundef -Wno-unknown-pragmas -Wno-unused-parameter \
- -Wno-missing-field-initializers
-DEPENDENCY_FLAGS = -MMD -MP -MF$(@:%=%.d) -MT$@
+WARN_CFLAGS := -Wall -Wstrict-prototypes -Wold-style-definition -Wundef \
+ -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith -Wwrite-strings
+DEP_CFLAGS = -MMD -MP -MF$(@:%=%.d) -MT$@
 CCAN_CFLAGS := $(OPT_CFAGS) -g3 -ggdb $(WARN_CFLAGS) -DCCAN_STR_DEBUG=1 -I. $(CFLAGS)
 
 # Anything with an _info file is a module ...
@@ -34,7 +32,7 @@ DEPS := $(OBJS:%=%.d)
 
 # We build all object files using our CCAN_CFLAGS, after config.h
 %.o : %.c config.h
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) -c $< -o $@
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) -c $< -o $@
 
 # _info files are compiled into executables and don't need dependencies
 %info : %_info config.h
@@ -42,11 +40,11 @@ DEPS := $(OBJS:%=%.d)
 
 # config.h is built by configurator
 CONFIGURATOR := tools/configurator/configurator
-CONFIG_DEPS := $(CONFIGURATOR).d
+CONFIGURATOR_DEPS := $(CONFIGURATOR).d
 $(CONFIGURATOR) : $(CONFIGURATOR).c
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< -o $@
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $< -o $@
 config.h: $(CONFIGURATOR) Makefile
-	$(PRE)$(CONFIGURATOR) $(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) >$@.tmp && mv $@.tmp $@
+	$(PRE)$(CONFIGURATOR) $(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) >$@.tmp && mv $@.tmp $@
 
 # Tools are under the tools/ directory
 TOOLS := ccan_depends doc_extract namespacize modfiles
@@ -60,7 +58,7 @@ TOOLS_CCAN_MODULES := err foreach hash htable list noerr opt rbuf \
 TOOLS_CCAN_SRCS := $(wildcard $(TOOLS_CCAN_MODULES:%=ccan/%/*.c))
 TOOLS_CCAN_OBJS := $(TOOLS_CCAN_SRCS:%.c=%.o)
 tools/% : tools/%.c $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $< $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS) -lm -o $@
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $< $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS) -lm -o $@
 
 # ccanlint requires its own build rules
 LINT := tools/ccanlint/ccanlint
@@ -71,7 +69,7 @@ LINT_CCAN_MODULES := asort autodata dgraph ilog lbalance ptr_valid strmap
 LINT_CCAN_SRCS := $(wildcard $(LINT_CCAN_MODULES:%=ccan/%/*.c))
 LINT_CCAN_OBJS := $(LINT_CCAN_SRCS:%.c=%.o) $(TOOLS_OBJS) $(TOOLS_CCAN_OBJS)
 $(LINT) : $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS)
-	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEPENDENCY_FLAGS) $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS) -lm -o $@
+	$(PRE)$(CC) $(CCAN_CFLAGS) $(DEP_CFLAGS) $(LINT).c $(LINT_OBJS) $(LINT_CCAN_OBJS) -lm -o $@
 
 # Tests
 LINT_OPTS.ok := -s
@@ -92,7 +90,7 @@ fastcheck: $(MODULES:%=%/.fast.ok)
 
 ifneq ($(filter clean, $(MAKECMDGOALS)),)
 # Bring in our generated dependencies since we are not cleaning
--include $(DEPS) $(TOOLS_DEPS) $(LINT_DEPS) $(TEST_DEPS)
+-include $(DEPS) $(CONFIGURATOR_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 endif
 
 # Default target is the object files, info files and tools
