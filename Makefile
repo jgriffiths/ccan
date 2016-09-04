@@ -88,7 +88,7 @@ TEST_DEPS := $(MODULES:%=%/.deps)
 check: $(MODULES:%=%/.ok)
 fastcheck: $(MODULES:%=%/.fast.ok)
 
-ifneq ($(filter clean, $(MAKECMDGOALS)),)
+ifeq ($(strip $(filter clean, $(MAKECMDGOALS))),)
 # Bring in our generated dependencies since we are not cleaning
 -include $(DEPS) $(CONFIGURATOR_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
 endif
