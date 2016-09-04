@@ -10,9 +10,6 @@ OPT_CFAGS := $(OPT.$(opt))
 
 default: all
 
-# Avoid some work when cleaning
-CLEANING := $(if $(filter clean, $(MAKECMDGOALS)),true,false)
-
 # Our flags for building
 WARN_CFLAGS := -Wall -W -Wstrict-prototypes -Wold-style-definition \
  -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith \
@@ -93,24 +90,18 @@ TEST_DEPS := $(MODULES:%=%/.deps)
 check: $(MODULES:%=%/.ok)
 fastcheck: $(MODULES:%=%/.fast.ok)
 
-# Bring in our generated dependencies
-ifeq ($(CLEANING),false)
+ifneq ($(filter clean, $(MAKECMDGOALS)),)
+# Bring in our generated dependencies since we are not cleaning
 -include $(DEPS) $(TOOLS_DEPS) $(LINT_DEPS) $(TEST_DEPS)
 endif
-
-# Targets
-.PHONY: clean TAGS
 
 # Default target is the object files, info files and tools
 all:: $(OBJS) $(ALL_INFOS) $(CONFIGURATOR) $(LINT) $(TOOLS)
 
-# Cleaning up
+.PHONY: clean TAGS
 clean:
-	$(PRE)rm -f $(DEPS) $(CONFIG_DEPS) $(LINT_DEPS) $(TOOLS_DEPS) $(TEST_DEPS)
-	$(PRE)rm -f $(OBJS) $(TOOLS_OBJS) $(LINT_OBJS)
-	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS)
-	$(PRE)find . -name "*.ok" -delete
-	$(PRE)rm -f TAGS config.h config.h.d
+	$(PRE)find . -name "*.o" -o -name "*.d" -o -name "*.ok" -o -name ".deps" -delete
+	$(PRE)rm -f $(CONFIGURATOR) $(LINT) $(TOOLS) TAGS config.h config.h.d
 
 # 'make TAGS' builds etags
 TAGS:
